@@ -1,0 +1,8 @@
+pandas
+scikit-learn
+faker
+fastapi
+uvicorn
+requests
+python-dotenv
+pytest
