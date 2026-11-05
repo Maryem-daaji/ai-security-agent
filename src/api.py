@@ -3,16 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from parse_logs import parse_log, parse_lines
 from agent import collect_alerts, explain
 from notify import notify
+import os
 
 app = FastAPI(title="AI Security Agent")
 
+ORIGINS = [o.strip() for o in os.getenv(
+    "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
+).split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 def analyze(df):
     alerts = [{**a, **explain(a)} for a in collect_alerts(df)]
     flagged = {a["ip"] for a in alerts}
@@ -57,9 +61,14 @@ def root():
 def analyze_demo():
     return analyze(parse_log())
 
+MAX_BYTES = 5 * 1024 * 1024  # 5 Mo
+
 @app.post("/analyze")
 async def analyze_upload(file: UploadFile = File(...)):
-    content = (await file.read()).decode("utf-8", errors="ignore")
+    raw = await file.read()
+    if len(raw) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Fichier trop volumineux (5 Mo maximum).")
+    content = raw.decode("utf-8", errors="ignore")
     try:
         df = parse_lines(content.splitlines())
     except ValueError as e:
