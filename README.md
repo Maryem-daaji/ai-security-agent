@@ -54,6 +54,16 @@ Sans clé, l'agent utilise un playbook de réponses prédéfinies. Avec la varia
 d'environnement `ANTHROPIC_API_KEY`, un LLM rédige les explications.
 Pour Telegram, renseigner `TELEGRAM_BOT_TOKEN` et `TELEGRAM_CHAT_ID` dans un fichier `.env`.
 
+
+## Docker
+
+```powershell
+docker build -t ai-security-agent .
+docker run -p 8000:8000 ai-security-agent
+```
+
+L'API est alors disponible sur http://127.0.0.1:8000/docs
+
 ## Tests
 
 ```powershell
