@@ -2,7 +2,6 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from parse_logs import parse_log, parse_lines
 from agent import collect_alerts, explain
-from notify import notify
 import os
 
 app = FastAPI(title="AI Security Agent")
@@ -83,11 +82,3 @@ def alerts():
 def stats():
     return analyze(parse_log())["stats"]
 
-@app.post("/notify")
-def send_alerts():
-    sent = 0
-    for a in collect_alerts(parse_log()):
-        if a["severity"] in ("high", "critical"):
-            notify(a, explain(a))
-            sent += 1
-    return {"alertes_envoyees": sent}
