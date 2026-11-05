@@ -1,12 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from parse_logs import parse_log
+from parse_logs import parse_log, parse_lines
 from agent import collect_alerts, explain
 from notify import notify
 
 app = FastAPI(title="AI Security Agent")
 
-# Autorise le dashboard React (localhost:5173) à appeler l'API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
@@ -14,30 +13,66 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_alerts_with_explanations():
-    df = parse_log()
-    result = []
-    for a in collect_alerts(df):
-        result.append({**a, **explain(a)})
-    return result
+def analyze(df):
+    alerts = [{**a, **explain(a)} for a in collect_alerts(df)]
+    flagged = {a["ip"] for a in alerts}
+
+    df = df.copy()
+    df["is_error"] = df["status"] >= 400
+
+    g = df.groupby("ip")
+    top = (
+        g.agg(requetes=("ip", "size"), taux_erreur=("is_error", "mean"))
+        .sort_values("requetes", ascending=False)
+        .head(10)
+    )
+    top_ips = [
+        {"ip": ip, "requetes": int(r.requetes),
+         "taux_erreur": round(float(r.taux_erreur), 3),
+         "suspect": ip in flagged}
+        for ip, r in top.iterrows()
+    ]
+
+    par_heure = df.set_index("time").resample("1h").size()
+    timeline = [{"heure": t.strftime("%d/%m %Hh"), "n": int(n)}
+                for t, n in par_heure.items()]
+
+    return {
+        "stats": {
+            "total_requetes": len(df),
+            "ip_uniques": int(df["ip"].nunique()),
+            "taux_erreur": round(float(df["is_error"].mean()), 3),
+            "codes_http": {str(k): int(v) for k, v in df["status"].value_counts().items()},
+        },
+        "alerts": alerts,
+        "top_ips": top_ips,
+        "timeline": timeline,
+    }
 
 @app.get("/")
 def root():
     return {"status": "ok"}
 
+@app.get("/analyze/demo")
+def analyze_demo():
+    return analyze(parse_log())
+
+@app.post("/analyze")
+async def analyze_upload(file: UploadFile = File(...)):
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    try:
+        df = parse_lines(content.splitlines())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return analyze(df)
+
 @app.get("/alerts")
 def alerts():
-    return get_alerts_with_explanations()
+    return analyze(parse_log())["alerts"]
 
 @app.get("/stats")
 def stats():
-    df = parse_log()
-    return {
-        "total_requetes": len(df),
-        "ip_uniques": int(df["ip"].nunique()),
-        "taux_erreur": round(float((df["status"] >= 400).mean()), 3),
-        "codes_http": {str(k): int(v) for k, v in df["status"].value_counts().items()},
-    }
+    return analyze(parse_log())["stats"]
 
 @app.post("/notify")
 def send_alerts():

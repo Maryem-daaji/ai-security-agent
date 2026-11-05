@@ -74,13 +74,14 @@ def collect_alerts(df, seuil_ml=-0.10):
 
     feats = build_features(df)
     feats = feats[feats["nb_requetes"] >= 5]
-    res = detect_anomalies(feats, contamination=0.02)
-    for ip, row in res[res["score"] < seuil_ml].iterrows():
-        if ip not in ips_regles:
-            alerts.append({"type": "anomalie_ml", "ip": ip,
-                           "count": int(row["nb_requetes"]),
-                           "score": round(float(row["score"]), 2),
-                           "severity": "medium"})
+    if len(feats) >= 20:  # assez d'IP pour que le modèle ait une référence "normale"
+        res = detect_anomalies(feats, contamination=0.02)
+        for ip, row in res[res["score"] < seuil_ml].iterrows():
+            if ip not in ips_regles:
+                alerts.append({"type": "anomalie_ml", "ip": ip,
+                               "count": int(row["nb_requetes"]),
+                               "score": round(float(row["score"]), 2),
+                               "severity": "medium"})
     return alerts
 
 if __name__ == "__main__":
