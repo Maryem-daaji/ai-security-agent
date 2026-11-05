@@ -1,13 +1,15 @@
 import re
+from pathlib import Path
 import pandas as pd
 
+DEFAULT_LOG = Path(__file__).resolve().parent.parent / "data" / "access.log"
 LOG_PATTERN = re.compile(
     r'(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] '
     r'"(?P<method>\S+) (?P<path>.+?) HTTP/[\d.]+" '
     r'(?P<status>\d{3}) (?P<size>\d+) "(?P<referer>[^"]*)" "(?P<ua>[^"]*)"'
 )
 
-def parse_log(path="data/access.log"):
+def parse_log(path=DEFAULT_LOG):
     rows = []
     with open(path, encoding="utf-8") as f:
         for line in f:
