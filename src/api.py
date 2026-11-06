@@ -20,6 +20,11 @@ def analyze(df):
     alerts = [{**a, **explain(a)} for a in collect_alerts(df)]
     flagged = {a["ip"] for a in alerts}
 
+    # Moment où chaque alerte atteint son pic (heure avec le plus de requêtes de cette IP)
+    for a in alerts:
+        par_heure_ip = df[df["ip"] == a["ip"]].set_index("time").resample("1h").size()
+        a["pic"] = par_heure_ip.idxmax().strftime("%d/%m %Hh")
+
     df = df.copy()
     df["is_error"] = df["status"] >= 400
 
@@ -51,7 +56,6 @@ def analyze(df):
         "top_ips": top_ips,
         "timeline": timeline,
     }
-
 @app.get("/")
 def root():
     return {"status": "ok"}
